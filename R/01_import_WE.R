@@ -37,6 +37,6 @@ source("R/01.5_join_deaths_populations.R")
 source("R/01.6_phe_life_expectancy.R")
 source("R/01.9_deaths_WE.R")
 
-rm(deaths)
+rm(deaths, west_essex_df)
 
 save.image("arriaga_westessex.Rdata")
