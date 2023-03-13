@@ -1,5 +1,4 @@
-# ltla_age <- pin_read(board, "sbeal/lsoa_pop_year") # takes too long with VPN
-ltla_age <- readRDS("S:/SHARE/PH EI/Mango Gitlab Backup/_CONNECT EXPORT/pinned/sbeal_lsoa_pop_year.Rds")
+ltla_age <- readRDS("data/public/lsoa_pop_year_westessex.Rds")
 
 ## A Populations by District+Sex+AgeBand #######################################
 
