@@ -153,3 +153,153 @@ counts <- map(c("broad_cause", "detailed_cause"), ~ {
   
   
 }) %>% set_names(., c("broad_cause", "detailed_cause"))
+
+## 2.1) DISEASE CCG ############################################################
+
+disease_ccg <- arriaga_ccg_quintile %>% imap(~ {
+  
+  sex_chr <- str_extract(.y, ".+(?=-)")
+  
+  sex <- if (sex_chr == "Male") 1 else 2
+  ccg_filter <- str_extract(.y, "(?<=-).+")
+  ccg_code <- case_when(ccg_filter == "NHS East and North Hertfordshire CCG" ~ "06K",
+                        ccg_filter == "NHS Herts Valleys CCG" ~ "06N",
+                        ccg_filter == "NHS West Essex CCG" ~ "07H")
+  
+  map(c("broad_cause", "detailed_cause"), function(cause) {
+  count_internal <- counts[[cause]][[paste0(cause, "_count_ccg")]] %>%
+    filter(
+      hcc_sex == sex_chr,
+      hcc_ccg_of_residence_code == ccg_code,
+      herts_quintile %in% c(1, 5)
+    ) %>%
+    mutate(across(paste0(cause, "_count_internal"), ~ replace(., is.na(.), 0))) %>% 
+    select(-hcc_ccg_of_residence_code,-hcc_sex) %>%
+    group_by(AgeGroup, herts_quintile)
+  
+  aggregate_death_rate_and_population <-
+    full_ccg_sex_age_quintile %>%
+    filter(gender == sex_chr, ccg == ccg_filter) %>%
+    ungroup() %>%
+    select(herts_quintile, AgeGroup, population, raw_death_rate) %>%
+    # pivot_wider(names_from = herts_imd_2019_quintile,
+    #             values_from = c(population, aggregate_death_rate)) %>% 
+    identity()
+  
+  death_rates <- aggregate_death_rate_and_population %>% 
+    left_join(count_internal,
+              by = c("AgeGroup", "herts_quintile")) %>%
+    mutate(!!paste0(cause, "_death_rate") := .data[[paste0(cause, "_count_internal")]]/population) %>% 
+    select(-contains("count"), -population) %>% 
+    filter(herts_quintile %in% c(1,5)) %>%
+    # pivot_wider(names_from = herts_imd_2019_quintile,
+    #             values_from = aggregate_death_rate) %>%
+    pivot_wider(names_from = cause,
+                values_from = paste0(cause, "_death_rate"), names_prefix = paste0(cause, "_")) %>%
+    pivot_wider(id_cols = AgeGroup,
+                names_from = herts_quintile,
+                values_from = raw_death_rate:last_col()) %>% 
+    janitor::clean_names()
+  
+  diseases <- {if (cause == "broad_cause") broad_diseases else if (cause == "detailed_cause") detailed_diseases} %>% 
+    unique() %>% 
+    janitor::make_clean_names()
+  
+  .x %>%
+    left_join(death_rates, by = c("AgeGroup" = "age_group")) %>%
+    pivot_longer(
+      cols = contains(diseases),
+      names_to = c("disease", ".value"),
+      names_sep = -1
+    ) %>%
+    mutate(delta = ((`5` - `1`) / (raw_death_rate_5 - raw_death_rate_1)) * total_effect) %>%
+    pivot_wider(names_from = "disease", values_from = c(`5`,`1`, `delta`), 
+                names_glue = "{disease}{.value}") %>% 
+    identity()
+  }) %>% reduce(inner_join) 
+  
+})
+
+## 2.3) DISEASE INTRA DISTRICTS QUINTILE #######################################
+
+disease_intra_districts <-
+  arriaga_intra_district_quintiles[1:20] %>% imap(~ {
+    
+    sex_chr <- str_extract(.y, ".+(?=-)")
+    
+    sex <- if (sex_chr == "Male") 1 else 2
+    
+    district <- str_extract(.y, "(?<=-).+")
+    
+    map(c("broad_cause", "detailed_cause"), function(cause) {
+      
+      count_internal <-
+        counts[[cause]][[paste0(cause, "_count_intra_district_quintile")]] %>%
+        filter(
+          hcc_sex == sex_chr,
+          district == !!district,
+          internal_district_quintile %in% c(quintile_1, quintile_2)
+        ) %>%
+        mutate(across(paste0(cause, "_count_internal"), ~ replace(., is.na(.), 0))) %>%
+        select(-district,-hcc_sex) %>%
+        group_by(AgeGroup, internal_district_quintile)
+      
+      aggregate_death_rate_and_population <-
+        full_ltla_sex_age_quintile %>%
+        filter(hcc_sex == sex_chr, district == !!district) %>%
+        select(internal_district_quintile,
+               AgeGroup,
+               population,
+               raw_death_rate) %>%
+        # pivot_wider(names_from = herts_imd_2019_quintile,
+        #             values_from = c(population, aggregate_death_rate)) %>%
+        identity()
+      
+      death_rates <- aggregate_death_rate_and_population %>%
+        left_join(count_internal,
+                  by = c("AgeGroup", "internal_district_quintile")) %>%
+        mutate(!!paste0(cause, "_death_rate") := .data[[paste0(cause, "_count_internal")]] /
+                 population) %>%
+        select(-contains("count"), -population) %>%
+        filter(internal_district_quintile %in% c(1, 5)) %>%
+        # pivot_wider(names_from = herts_imd_2019_quintile,
+        #             values_from = aggregate_death_rate) %>%
+        pivot_wider(
+          names_from = cause,
+          values_from = paste0(cause, "_death_rate"),
+          names_prefix = paste0(cause, "_")
+        ) %>%
+        pivot_wider(
+          id_cols = AgeGroup,
+          names_from = internal_district_quintile,
+          values_from = raw_death_rate:last_col()
+        ) %>%
+        janitor::clean_names()
+      
+      diseases <-
+        {
+          if (cause == "broad_cause")
+            broad_diseases
+          else if (cause == "detailed_cause")
+            detailed_diseases
+        } %>%
+        unique() %>%
+        janitor::make_clean_names()
+      
+      .x %>%
+        left_join(death_rates, by = c("AgeGroup" = "age_group")) %>%
+        pivot_longer(
+          cols = contains(diseases),
+          names_to = c("disease", ".value"),
+          names_sep = -1
+        ) %>%
+        mutate(delta = ((`5` - `1`) / (raw_death_rate_5 - raw_death_rate_1)) * total_effect) %>%
+        pivot_wider(
+          names_from = "disease",
+          values_from = c(`5`, `1`, `delta`),
+          names_glue = "{disease}{.value}"
+        ) %>%
+        identity()
+    }) %>% reduce(inner_join)
+    
+  })
