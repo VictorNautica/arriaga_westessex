@@ -219,6 +219,73 @@ disease_ccg <- arriaga_ccg_quintile %>% imap(~ {
   }) %>% reduce(inner_join) 
   
 })
+  
+## 2.2) DISEASE DISTRICTS ######################################################
+
+disease_inter_districts <- arriaga_inter_district %>% imap(function(outer_df, sex) {
+  
+  outer_df %>% imap(function(internal_df, compared_districts) {
+    
+    district1 <- str_extract(compared_districts, ".+(?=-)")
+    district2 <- str_extract(compared_districts, "(?<=-).+")
+    
+    district1_clean <- janitor::make_clean_names(district1)
+    district2_clean <- janitor::make_clean_names(district2)
+    
+    df_final <- map(c("broad_cause", "detailed_cause"), function(cause) {
+      
+      count_internal <-
+        counts[[cause]][[paste0(cause, "_count_inter_district")]] %>%
+        filter(hcc_sex == sex,
+               district_name %in% c(district1, district2)) %>%
+        mutate(across(paste0(cause, "_count_internal"), ~ replace(., is.na(.), 0))) %>%
+        group_by(district_name, AgeGroup)
+      
+      aggregate_death_rate_and_population <-
+        full_ltla_sex_age %>%
+        filter(hcc_sex == sex, district_name %in% c(district1, district2)) %>%
+        select(district_name, AgeGroup, population, raw_death_rate) %>%
+        identity()
+      
+      death_rates <- aggregate_death_rate_and_population %>%
+        left_join(count_internal,
+                  by = c("AgeGroup", "district_name")) %>%
+        mutate(!!paste0(cause, "_death_rate") := .data[[paste0(cause, "_count_internal")]]/population) %>%
+        select(-contains("count"), -population) %>%
+        # pivot_wider(names_from = herts_imd_2019_quintile,
+        #             values_from = aggregate_death_rate) %>%
+        pivot_wider(names_from = cause,
+                    values_from = paste0(cause, "_death_rate"), names_prefix = paste0(cause, "_")) %>%
+        pivot_wider(id_cols = AgeGroup,
+                    names_from = district_name,
+                    values_from = raw_death_rate:last_col()) %>%
+        janitor::clean_names()
+      
+      diseases <- {if (cause == "broad_cause") broad_diseases else if (cause == "detailed_cause") detailed_diseases} %>% 
+        unique() %>% 
+        janitor::make_clean_names()
+      
+      intermediate <- internal_df %>%
+        left_join(death_rates, by = c("AgeGroup" = "age_group"))
+      
+      
+      map_dfc(diseases,
+              ~ transmute(
+                intermediate,
+                !!paste0(cause, "_", .x, "_delta") :=
+                  (.data[[paste0(cause, "_", .x, "_", district1_clean)]] - .data[[paste0(cause, "_", .x, "_", district2_clean)]]) /
+                  (.data[[paste0("raw_death_rate_", district1_clean)]] - .data[[paste0("raw_death_rate_", district2_clean)]]) * total_effect
+              )) %>%
+        bind_cols(intermediate, .)
+    }) %>% reduce(inner_join)
+    
+    return(df_final)
+    
+    
+  }
+  )
+  
+})
 
 ## 2.3) DISEASE INTRA DISTRICTS QUINTILE #######################################
 
