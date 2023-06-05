@@ -171,33 +171,33 @@ disease_ccg <- arriaga_ccg_quintile %>% imap(~ {
     filter(
       hcc_sex == sex_chr,
       hcc_ccg_of_residence_code == ccg_code,
-      herts_quintile %in% c(1, 5)
+      herts_imd_2019_quintile %in% c(1, 5)
     ) %>%
     mutate(across(paste0(cause, "_count_internal"), ~ replace(., is.na(.), 0))) %>% 
     select(-hcc_ccg_of_residence_code,-hcc_sex) %>%
-    group_by(AgeGroup, herts_quintile)
+    group_by(AgeGroup, herts_imd_2019_quintile)
   
   aggregate_death_rate_and_population <-
     full_ccg_sex_age_quintile %>%
     filter(gender == sex_chr, ccg == ccg_filter) %>%
     ungroup() %>%
-    select(herts_quintile, AgeGroup, population, raw_death_rate) %>%
+    select(herts_imd_2019_quintile, AgeGroup, population, raw_death_rate) %>%
     # pivot_wider(names_from = herts_imd_2019_quintile,
     #             values_from = c(population, aggregate_death_rate)) %>% 
     identity()
   
   death_rates <- aggregate_death_rate_and_population %>% 
     left_join(count_internal,
-              by = c("AgeGroup", "herts_quintile")) %>%
+              by = c("AgeGroup", "herts_imd_2019_quintile")) %>%
     mutate(!!paste0(cause, "_death_rate") := .data[[paste0(cause, "_count_internal")]]/population) %>% 
     select(-contains("count"), -population) %>% 
-    filter(herts_quintile %in% c(1,5)) %>%
+    filter(herts_imd_2019_quintile %in% c(1,5)) %>%
     # pivot_wider(names_from = herts_imd_2019_quintile,
     #             values_from = aggregate_death_rate) %>%
     pivot_wider(names_from = cause,
                 values_from = paste0(cause, "_death_rate"), names_prefix = paste0(cause, "_")) %>%
     pivot_wider(id_cols = AgeGroup,
-                names_from = herts_quintile,
+                names_from = herts_imd_2019_quintile,
                 values_from = raw_death_rate:last_col()) %>% 
     janitor::clean_names()
   
