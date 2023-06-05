@@ -290,7 +290,7 @@ disease_inter_districts <- arriaga_inter_district %>% imap(function(outer_df, se
 ## 2.3) DISEASE INTRA DISTRICTS QUINTILE #######################################
 
 disease_intra_districts <-
-  arriaga_intra_district_quintiles[1:20] %>% imap(~ {
+  arriaga_intra_district_quintiles %>% imap(~ {
     
     sex_chr <- str_extract(.y, ".+(?=-)")
     
