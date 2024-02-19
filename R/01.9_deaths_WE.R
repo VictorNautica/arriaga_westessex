@@ -237,19 +237,19 @@ disease_inter_districts <- arriaga_inter_district %>% imap(function(outer_df, se
       count_internal <-
         counts[[cause]][[paste0(cause, "_count_inter_district")]] %>%
         filter(hcc_sex == sex,
-               district_name %in% c(district1, district2)) %>%
+               district %in% c(district1, district2)) %>%
         mutate(across(paste0(cause, "_count_internal"), ~ replace(., is.na(.), 0))) %>%
-        group_by(district_name, AgeGroup)
+        group_by(district, AgeGroup)
       
       aggregate_death_rate_and_population <-
         full_ltla_sex_age %>%
-        filter(hcc_sex == sex, district_name %in% c(district1, district2)) %>%
-        select(district_name, AgeGroup, population, raw_death_rate) %>%
+        filter(hcc_sex == sex, district %in% c(district1, district2)) %>%
+        select(district, AgeGroup, population, raw_death_rate) %>%
         identity()
       
       death_rates <- aggregate_death_rate_and_population %>%
         left_join(count_internal,
-                  by = c("AgeGroup", "district_name")) %>%
+                  by = c("AgeGroup", "district")) %>%
         mutate(!!paste0(cause, "_death_rate") := .data[[paste0(cause, "_count_internal")]]/population) %>%
         select(-contains("count"), -population) %>%
         # pivot_wider(names_from = herts_imd_2019_quintile,
@@ -257,7 +257,7 @@ disease_inter_districts <- arriaga_inter_district %>% imap(function(outer_df, se
         pivot_wider(names_from = cause,
                     values_from = paste0(cause, "_death_rate"), names_prefix = paste0(cause, "_")) %>%
         pivot_wider(id_cols = AgeGroup,
-                    names_from = district_name,
+                    names_from = district,
                     values_from = raw_death_rate:last_col()) %>%
         janitor::clean_names()
       
@@ -305,7 +305,7 @@ disease_intra_districts <-
         filter(
           hcc_sex == sex_chr,
           district == !!district,
-          internal_district_quintile %in% c(quintile_1, quintile_2)
+          internal_district_quintile %in% c(1, 5)
         ) %>%
         mutate(across(paste0(cause, "_count_internal"), ~ replace(., is.na(.), 0))) %>%
         select(-district,-hcc_sex) %>%
